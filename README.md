@@ -33,12 +33,12 @@ If the mod and save file weren't detected correctly - choose it manually at the 
 
 <img width="620" height="423" alt="Снимок экрана 2026-10-03 062626" src="https://github.com/user-attachments/assets/67918209-a20b-4ae4-87d7-59619894b423" />
 
-Nodes with green background are the ones you've already researched. 
-Blue ones are the ones being researched now. It says how many researches are working on it, how much time is left and how much fame you'll get off of it.
-The red arrows show which research topics would get blocked. Once the research is complete the blocked node becomes red.
-Yellow nodes are the ones available for research now.
-The gray ones and the ones, that are not available yet and you can see which dependencies are not satisfied yet
+- Nodes with green background are the ones you've already researched. 
+- Blue ones are the ones being researched now. It says how many researches are working on it, how much time is left and how much fame you'll get off of it.
+- The red arrows show which research topics would get blocked. Once the research is complete the blocked node becomes red.
+- Yellow nodes are the ones available for research now.
+- The gray ones and the ones, that are not available yet and you can see which dependencies are not satisfied yet
 
-<img width="1437" height="678" alt="Снимок экрана 2026-10-03 063142" src="https://github.com/user-attachments/assets/dd33966d-9466-44ae-8d42-739504c958b4" />
+<img width="50%" height="50%" alt="Снимок экрана 2026-10-03 063142" src="https://github.com/user-attachments/assets/dd33966d-9466-44ae-8d42-739504c958b4" />
 
 
