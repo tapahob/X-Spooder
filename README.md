@@ -5,6 +5,11 @@ Research tree viewer for OpenXcom Extended mods – built for
 conversions too. It reads the rulesets, texts and saved games of your own game folder and shows the tree with
 sprites, localized names and descriptions, the items a topic needs, and your progress.
 
+Demo
+========
+
+[![IMAGE_ALT_TEXT](http://img.youtube.com/vi/3BVbi8vJSh8/0.jpg)](https://youtu.be/3BVbi8vJSh8 "Dem Spooder app for X-Com!")
+
 <img width="50%" height="50%" alt="055926" src="https://github.com/user-attachments/assets/f7faca72-8ba6-4cfb-bc0a-c0aad64cf231" />
 
 Online version
