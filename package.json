@@ -1,0 +1,24 @@
+{
+  "name": "x-spooder",
+  "productName": "X-Spooder",
+  "version": "0.1.0",
+  "description": "Tech tree visualizer for OpenXcom Extended mods such as X-Piratez",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "inspect-data": "node scripts/inspect-data.js",
+    "build": "node scripts/build.js",
+    "web-test": "electron scripts/web-test.js",
+    "perf": "electron scripts/perf.js"
+  },
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "@dagrejs/dagre": "^1.1.4",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^38.0.0"
+  }
+}

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="X-Spooder: research tree viewer for X-Piratez and other OpenXcom mods. Reads your own game folder right in the browser.">
+  <!-- Everything runs in the page; this policy also forbids it to send anything anywhere. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'none'">
+  <title>X-Spooder</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app" hidden>
+    <header id="topbar">
+      <div class="brand">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+            <path d="M9 10 3 5M9 12H2M9 14l-6 5M15 10l6-5M15 12h7M15 14l6 5"/>
+          </g>
+          <ellipse cx="12" cy="12" rx="3.6" ry="4.6" fill="currentColor"/>
+        </svg>
+        <span>X-Spooder</span>
+      </div>
+
+      <div class="group">
+        <button id="btn-home" class="icon-btn">
+          <svg viewBox="0 0 16 16" width="16" height="16"><path d="M2 8 8 2.5 14 8M4 7v6h8V7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="btn-back" class="icon-btn" disabled>
+          <svg viewBox="0 0 16 16" width="16" height="16"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="btn-fwd" class="icon-btn" disabled>
+          <svg viewBox="0 0 16 16" width="16" height="16"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+
+      <div class="group">
+        <label><span data-i18n="depthUp"></span>
+          <select id="sel-up"></select>
+        </label>
+        <label><span data-i18n="depthDown"></span>
+          <select id="sel-down"></select>
+        </label>
+        <label id="gen-limit"><span data-i18n="gens"></span>
+          <select id="sel-gen"></select>
+        </label>
+      </div>
+
+      <div class="group toggles" id="kind-toggles"></div>
+
+      <div class="spacer"></div>
+
+      <div class="group">
+        <button id="btn-fit" data-i18n="fit"></button>
+        <select id="sel-lang"></select>
+        <button id="btn-settings" class="icon-btn">
+          <svg viewBox="0 0 16 16" width="16" height="16"><path d="M1.5 4.5h4l1.5 2h7.5v6.5h-13z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <aside id="sidebar">
+      <div class="search-box">
+        <input id="search" type="search" spellcheck="false" autocomplete="off">
+        <select id="sel-section"></select>
+        <select id="sel-state"></select>
+      </div>
+      <div id="results"></div>
+      <div id="results-info"></div>
+      <div id="save-info"></div>
+      <footer id="mod-info"></footer>
+    </aside>
+
+    <main id="viewport">
+      <canvas id="canvas-base"></canvas>
+      <canvas id="canvas-pinned"></canvas>
+      <canvas id="canvas-hot"></canvas>
+      <canvas id="canvas-labels"></canvas>
+      <div id="world">
+        <div id="nodes"></div>
+      </div>
+      <div id="notice" hidden></div>
+      <div id="legend"></div>
+      <div id="zoom">
+        <button id="btn-zoom-out" class="icon-btn">−</button>
+        <span id="zoom-level">100%</span>
+        <button id="btn-zoom-in" class="icon-btn">+</button>
+      </div>
+    </main>
+
+    <aside id="details"></aside>
+  </div>
+
+  <div id="splash">
+    <div class="splash-box">
+      <div class="spinner"></div>
+      <div id="splash-text">Loading…</div>
+      <div id="splash-hint" hidden></div>
+      <div id="splash-error" hidden></div>
+      <button id="splash-choose" class="primary" hidden>Choose X-COM folder…</button>
+    </div>
+  </div>
+
+  <script src="vendor/dagre.min.js"></script>
+  <script src="vendor/js-yaml.min.js"></script>
+  <script src="i18n.js"></script>
+  <script src="gamefs.js"></script>
+  <script src="platform.js"></script>
+  <script src="loader.js"></script>
+  <script src="saves.js"></script>
+  <script src="images.js"></script>
+  <script src="model.js"></script>
+  <script src="graph.js"></script>
+  <script src="details.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
