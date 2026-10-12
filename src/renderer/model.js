@@ -3,10 +3,12 @@
 (function () {
   window.XS = window.XS || {};
 
-  // Edge kinds. `dep`, `unlock` and `free` are the ways to reach a topic and are followed
+  // Edge kinds. `dep`, `unlock`, `free` and `event` are the ways to reach a topic and are followed
   // when walking the tree; `disable` is only drawn between topics already on screen.
-  const KINDS = ['dep', 'unlock', 'free', 'disable'];
-  const WALK_KINDS = ['dep', 'unlock', 'free'];
+  // An `event` link runs from a research that fires an event to what that event hands out:
+  // a topic, or (`item` set) the item that topic is researched from.
+  const KINDS = ['dep', 'unlock', 'free', 'event', 'disable'];
+  const WALK_KINDS = ['dep', 'unlock', 'free', 'event'];
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const norm = (s) => String(s).toLowerCase().replace(/ё/g, 'е');
@@ -22,12 +24,12 @@
       for (const id of this.ids) { this.inc[id] = []; this.out[id] = []; }
 
       const seen = new Set();
-      const edge = (from, to, kind, gate) => {
-        const k = `${from}>${to}>${kind}`;
+      const edge = (from, to, kind, gate, item) => {
+        const k = `${from}>${to}>${kind}${item ? '>item' : ''}`;
         if (from === to || seen.has(k) || !this.topics[from] || !this.topics[to]) return;
         seen.add(k);
-        this.out[from].push({ to, kind, gate });
-        this.inc[to].push({ from, kind, gate });
+        this.out[from].push({ to, kind, gate, item });
+        this.inc[to].push({ from, kind, gate, item });
       };
       for (const t of Object.values(this.topics)) {
         for (const d of t.deps) edge(d, t.id, 'dep');
@@ -36,6 +38,16 @@
         for (const f of t.free) edge(t.id, f, 'free');
         for (const [gate, list] of Object.entries(t.freeProtected)) for (const f of list) edge(t.id, f, 'free', gate);
         for (const x of t.disables) edge(t.id, x, 'disable');
+      }
+      for (const ev of Object.values(data.events)) {
+        for (const w of ev.ways) {
+          const from = w.kind === 'script' ? w.research.yes : w.kind === 'research' ? [w.id] : [];
+          for (const f of from) {
+            for (const to of ev.research) edge(f, to, 'event', ev.id);
+            // the event hands out the item a topic is researched from: a way to that topic too
+            for (const it of ev.items) edge(f, it.id, 'event', ev.id, true);
+          }
+        }
       }
       this.setStrings(strings);
     }
@@ -157,6 +169,7 @@
 
       const disabled = new Set();
       for (const id of done) for (const x of this.topics[id].disables) disabled.add(x);
+      this.spreadDisabled(disabled, done);
 
       // what each base can do: stock and the services its finished facilities provide
       const provides = {};
@@ -174,6 +187,29 @@
         if (this.dependenciesMet(id, done) && this.baseCanResearch(id, bases)) available.add(id);
       }
       this.progress = { save, done, active, available, disabled, bases };
+    }
+
+    /**
+     * A closed topic takes down everything that cannot be reached without it: a topic is lost
+     * when one of its `requires` is, or when a dependency is and no other way in remains - an
+     * unlock or a free grant from a topic still within reach, an event or a mission.
+     */
+    spreadDisabled(disabled, done) {
+      const lost = (id) => disabled.has(id) && !done.has(id);
+      const closed = (id) => {
+        const t = this.topics[id];
+        if (t.requires.some(lost)) return true;
+        if (!t.deps.some(lost) || t.sources.length) return false;
+        return !this.inc[id].some((e) => (e.kind === 'unlock' || e.kind === 'free') && !lost(e.from));
+      };
+      const queue = [...disabled].filter(lost);
+      while (queue.length) {
+        for (const e of this.out[queue.pop()]) {
+          if (e.kind === 'disable' || done.has(e.to) || disabled.has(e.to) || !closed(e.to)) continue;
+          disabled.add(e.to);
+          queue.push(e.to);
+        }
+      }
     }
 
     /** OXCE rule: every `requires`, and then either all dependencies or one direct unlock. */
@@ -249,6 +285,13 @@
     disabledBy(id) {
       const p = this.progress;
       return p ? this.inc[id].filter((e) => e.kind === 'disable' && p.done.has(e.from)).map((e) => e.from) : [];
+    }
+
+    /** The closed-off prerequisites that took this topic down with them. */
+    lostDeps(id) {
+      const p = this.progress;
+      const t = this.topics[id];
+      return p ? [...new Set([...t.requires, ...t.deps])].filter((d) => p.disabled.has(d) && !p.done.has(d)) : [];
     }
 
     parents(id, kinds) { return this.inc[id].filter((e) => kinds.has(e.kind)); }

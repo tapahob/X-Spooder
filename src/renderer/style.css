@@ -12,6 +12,7 @@
   --dep: #8fa0c8;
   --unlock: #5ecb86;
   --free: #f0c04a;
+  --event: #4cc3d9;
   --disable: #ec6257;
   --item: #c296f5;
 
@@ -85,6 +86,7 @@ select, input[type="search"] {
 .k-dep { --c: var(--dep); }
 .k-unlock { --c: var(--unlock); }
 .k-free { --c: var(--free); }
+.k-event { --c: var(--event); }
 .k-disable { --c: var(--disable); }
 .k-item { --c: var(--item); }
 .k-source { --c: var(--accent); }
@@ -159,6 +161,7 @@ select, input[type="search"] {
 .edge { fill: none; stroke: var(--c); stroke-width: 1.5; }
 .edge.k-unlock { stroke-dasharray: 7 4; }
 .edge.k-free { stroke-dasharray: 2 4; stroke-linecap: round; stroke-width: 2; }
+.edge.k-event { stroke-dasharray: 12 4; }
 .edge.k-disable { stroke-dasharray: 10 3 2 3; }
 .edge.k-item { stroke-width: 2; }
 
@@ -324,6 +327,9 @@ button.primary:hover:not(:disabled) { background: #ffc266; border-color: #ffc266
 .manu .muted, .item-row .muted { font-size: 12px; }
 
 ul.plain { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+ul.plain li { display: grid; gap: 4px; }
+ul.plain .cond { font-size: 12px; }
+ul.plain .or { color: var(--event); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
 ul.plain .tag { margin-right: 7px; padding: 1px 6px; border: 1px solid var(--line-2); border-radius: 4px; color: var(--accent); font-size: 11px; }
 
 details.reveal { border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }

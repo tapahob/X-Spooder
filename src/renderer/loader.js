@@ -200,6 +200,7 @@
     craftWeapons: 'type',
     units: 'type',
     events: 'name',
+    eventScripts: 'type',
     alienDeployments: 'type',
     ufos: 'type',
     alienMissions: 'type',
@@ -323,7 +324,7 @@
     onProgress({ stage: 'graph', done: files.length, total: files.length });
 
     const sprite = makeSpriteResolver(sprites, layout);
-    const { research, items, manufacture, ufopaedia, armors, facilities, units, events, alienDeployments, ufos, alienMissions } = stores;
+    const { research, items, manufacture, ufopaedia, armors, facilities, units, events, eventScripts, alienDeployments, ufos, alienMissions } = stores;
     const keys = new Set();
     const want = (k) => { if (k != null && k !== '') keys.add(String(k)); return k; };
 
@@ -461,6 +462,41 @@
     for (const [name, e] of events) for (const t of arr(e.researchList)) addSource(t, 'event', name);
     for (const [type, d] of alienDeployments) for (const t of arr(d.unlockedResearch)) addSource(t, 'mission', type);
 
+    // What makes the game fire an event: an event script (checked every month), a finished
+    // research or a finished mission.
+    const eventWays = new Map(); // event -> [{kind, id, ...}]
+    const addWay = (event, way) => {
+      if (!eventWays.has(event)) eventWays.set(event, []);
+      eventWays.get(event).push(way);
+    };
+    const names = (v) => (Array.isArray(v) ? v.map(String) : v && typeof v === 'object' ? Object.keys(v) : arr(v));
+    const flags = (v) => { // {NAME: true|false} -> what has to be there and what must not
+      const yes = [], no = [];
+      if (v && typeof v === 'object') for (const [k, on] of Object.entries(v)) (on ? yes : no).push(want(String(k)));
+      return { yes, no };
+    };
+    const num = (v, fallback) => (v == null || Number.isNaN(Number(v)) ? fallback : Number(v));
+    for (const [type, s] of eventScripts) {
+      const fired = new Set([...names(s.oneTimeSequentialEvents), ...names(s.oneTimeRandomEvents)]);
+      if (s.eventWeights && typeof s.eventWeights === 'object') {
+        for (const month of Object.values(s.eventWeights)) names(month).forEach((n) => fired.add(n));
+      }
+      const way = {
+        kind: 'script', id: type,
+        research: flags(s.researchTriggers), items: flags(s.itemTriggers), facilities: flags(s.facilityTriggers),
+        regions: flags(s.xcomBaseInRegionTriggers), countries: flags(s.xcomBaseInCountryTriggers),
+        first: num(s.firstMonth, 0), last: num(s.lastMonth, -1), odds: num(s.executionOdds, 100),
+        minDifficulty: num(s.minDifficulty, 0), maxDifficulty: num(s.maxDifficulty, 4),
+        pool: fired.size, // a script that fires picks one of its events
+      };
+      for (const n of fired) addWay(n, way);
+    }
+    for (const [id, r] of research) if (r.spawnedEvent) addWay(String(r.spawnedEvent), { kind: 'research', id });
+    for (const [type, d] of alienDeployments) {
+      for (const n of names(d.successEvents)) addWay(n, { kind: 'mission', id: want(type), failed: false });
+      for (const n of names(d.failureEvents)) addWay(n, { kind: 'mission', id: want(type), failed: true });
+    }
+
     // Research topics.
     const topics = {};
     const usedItems = new Set();
@@ -532,6 +568,52 @@
       }
     }
 
+    // Events that hand out research or the items research is done from, with everything that
+    // can fire them. Some item lists are given whole, of the others one random entry is picked.
+    const eventOut = {};
+    const itemEvents = new Map(); // item -> the events that hand it out
+    const researched = (id) => exists(id) && topics[id].needItem && items.has(id);
+    const counts = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.entries(v).map(([k, n]) => [String(k), Number(n) || 1]) : []);
+    for (const [name, e] of events) {
+      const gives = [...new Set(arr(e.researchList))].filter(exists);
+      const handed = new Map();
+      const hand = (id, count, random) => {
+        if (!researched(id)) return;
+        const it = handed.get(id) || { id, count: 0, random };
+        it.count = random ? Math.max(it.count, count) : it.count + count;
+        it.random = it.random && random;
+        handed.set(id, it);
+      };
+      for (const id of arr(e.everyItemList)) hand(id, 1, false);
+      for (const [id, n] of counts(e.everyMultiItemList)) hand(id, n, false);
+      for (const id of arr(e.randomItemList)) hand(id, 1, true);
+      for (const id of names(e.weightedItemList)) hand(id, 1, true);
+      for (const set of Array.isArray(e.randomMultiItemList) ? e.randomMultiItemList : []) {
+        for (const [id, n] of counts(set)) hand(id, n, true);
+      }
+      if (!gives.length && !handed.size) continue;
+      for (const id of handed.keys()) {
+        if (!itemEvents.has(id)) itemEvents.set(id, []);
+        itemEvents.get(id).push(want(name));
+      }
+      // (scripts usually forbid the very topic they give, to fire once: that is not worth showing)
+      const ways = (eventWays.get(name) || [])
+        .filter((w) => w.kind !== 'research' || exists(w.id))
+        .map((w) => (w.kind !== 'script' ? w : {
+          ...w, research: { yes: w.research.yes.filter(exists), no: w.research.no.filter((x) => exists(x) && !gives.includes(x)) },
+        }));
+      // Mods repeat a script word for word to give an event several chances a month: keep one
+      // copy and count them (`times`).
+      const unique = new Map();
+      for (const w of ways) {
+        const key = JSON.stringify({ ...w, id: null });
+        if (unique.has(key)) unique.get(key).times++;
+        else unique.set(key, { ...w, times: 1 });
+      }
+      ways.splice(0, ways.length, ...unique.values());
+      eventOut[name] = { id: name, research: gives, items: [...handed.values()], ways };
+    }
+
     // Items that show up on the tree (needed for / produced by research).
     const itemOut = {};
     for (const id of usedItems) {
@@ -543,7 +625,7 @@
         costBuy: it ? Number(it.costBuy) || 0 : 0, costSell: it ? Number(it.costSell) || 0 : 0,
         requiresBuy: it ? arr(it.requiresBuy).filter(exists) : [],
         requires: it ? arr(it.requires).filter(exists) : [],
-        makers,
+        makers, events: itemEvents.get(id) || [],
         liveAlien: !!(it && it.liveAlien),
       };
       want(id);
@@ -575,7 +657,7 @@
         hasMaster: !!layout.master,
         dangling,
       },
-      topics, items: itemOut, manufacture: manuOut, articles: articleOut, funcProviders,
+      topics, items: itemOut, manufacture: manuOut, articles: articleOut, funcProviders, events: eventOut,
       stringKeys: [...keys],
     };
   }

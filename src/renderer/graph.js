@@ -34,6 +34,7 @@
     dep: { width: 1.5, dash: [] },
     unlock: { width: 1.5, dash: [7, 4] },
     free: { width: 2, dash: [2, 4], cap: 'round' },
+    event: { width: 1.5, dash: [12, 4] },
     disable: { width: 1.5, dash: [10, 3, 2, 3] },
     item: { width: 2, dash: [] },
   };
@@ -272,7 +273,7 @@
       this.focus = null;      // the single focused topic, if there is exactly one
       this.up = 2;
       this.down = 1;
-      this.kinds = new Set(['dep', 'unlock', 'free', 'disable']);
+      this.kinds = new Set(['dep', 'unlock', 'free', 'event', 'disable']);
       this.showItems = true;
       this.maxGen = UNLIMITED;   // how many generations past the available research to show
       this.groupSections = true; // one horizontal lane per ufopaedia section
@@ -354,7 +355,10 @@
       const edges = [];
       for (const id of vis) {
         for (const e of m.out[id]) {
-          if (this.kinds.has(e.kind) && vis.has(e.to)) edges.push({ from: `t:${id}`, to: `t:${e.to}`, kind: e.kind });
+          if (!this.kinds.has(e.kind) || !vis.has(e.to)) continue;
+          // an event that hands out the item a topic needs points at the item, when it is shown
+          const to = e.item && this.showItems && m.hasItem(e.to) ? `i:${e.to}` : `t:${e.to}`;
+          edges.push({ from: `t:${id}`, to, kind: e.kind });
         }
       }
 
@@ -402,8 +406,10 @@
         ranker: nodes.length > 140 ? 'tight-tree' : 'network-simplex',
       });
       g.setDefaultEdgeLabel(() => ({}));
-      for (const n of nodes) g.setNode(n.key, { width: n.w, height: n.h });
       const links = edges.filter((e) => e.kind !== 'disable');
+      // dagre breaks cycles walking the nodes in the order they were added
+      for (const key of this.focusParents(links)) g.setNode(key, {});
+      for (const n of nodes) g.setNode(n.key, { width: n.w, height: n.h });
       for (const e of links) {
         const weight = e.kind === 'item' ? 6 : e.kind === 'dep' ? 2 : 1;
         // roots sit one rank further away, so the item nodes of their children do not share their column
@@ -538,6 +544,19 @@
     }
 
     /**
+     * The direct prerequisites of the focused topic (unless it leads straight back to them).
+     * Mods do have circular requirements, with an event or a freebie as the way in; the layouts
+     * start breaking cycles from these nodes, so that they stay on the left of the focus and the
+     * link that gets drawn backwards is a farther one of the circle.
+     */
+    focusParents(links) {
+      if (!this.focus) return [];
+      const key = `t:${this.focus}`;
+      const kids = new Set(links.filter((e) => e.from === key).map((e) => e.to));
+      return [...new Set(links.filter((e) => e.to === key && !kids.has(e.from)).map((e) => e.from))];
+    }
+
+    /**
      * Gives every node a column (`rank`): after everything it depends on, and otherwise as
      * close to its neighbours as the links allow.
      */
@@ -560,7 +579,7 @@
       // Depth-first walk: yields a topological order and marks the links that close a cycle.
       const state = new Uint8Array(count); // 0 new, 1 on the stack, 2 finished
       const order = [];
-      for (let start = 0; start < count; start++) {
+      for (const start of [...this.focusParents(links).map((key) => index.get(key)), ...nodes.keys()]) {
         if (state[start]) continue;
         state[start] = 1;
         const stack = [[start, 0]];

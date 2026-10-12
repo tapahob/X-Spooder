@@ -6,7 +6,7 @@
   const RESULT_LIMIT = 250;
   const DEPTHS = [0, 1, 2, 3, 4, 6, 99];
   const GENERATIONS = [0, 1, 2, 3, 4, 5, 99]; // 99 = unlimited
-  const TOGGLES = ['dep', 'unlock', 'free', 'disable', 'item'];
+  const TOGGLES = ['dep', 'unlock', 'free', 'event', 'disable', 'item'];
   const SWITCHES = [...TOGGLES, 'group', 'all']; // toolbar switches: edge kinds, section grouping, all entry points
   const STATES = ['done', 'avail', 'active', 'disabled'];
   const START = '@start'; // pseudo-location: the tree grown from the starting research projects

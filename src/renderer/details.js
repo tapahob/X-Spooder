@@ -151,7 +151,9 @@
       if (!b) return;
       if (b.disabled) {
         const by = m.disabledBy(id).map((d) => m.name(d));
-        note('p-disabled', by.length ? t('blockedDisabledBy', by.join(', ')) : t('blockedDisabled'));
+        const lost = m.lostDeps(id).map((d) => m.name(d));
+        note('p-disabled', by.length ? t('blockedDisabledBy', by.join(', '))
+          : lost.length ? t('blockedDisabledDeps', lost.join(', ')) : t('blockedDisabled'));
       }
       if (b.deps.length) {
         const names = b.deps.slice(0, 5).map((d) => m.name(d)).join(', ');
@@ -159,6 +161,45 @@
       }
       if (b.item) note('p-blocked', t('blockedItem'));
       if (b.funcs.length) note('p-blocked', t('blockedFunc', b.funcs.join(', ')));
+    }
+
+    /** Under an event that hands the topic out: everything that can make the game fire it. */
+    eventWays(id, box, item) {
+      const m = this.model;
+      const ev = m.data.events[id];
+      const line = (text) => box.appendChild(h('div', 'cond muted', text));
+      const chips = (label, ids) => {
+        if (!ids.length) return;
+        line(label);
+        const list = h('div', 'chips');
+        for (const x of ids) list.appendChild(this.chip(x));
+        box.appendChild(list);
+      };
+      const listed = (yes, no, flags) => {
+        if (flags.yes.length) line(t(yes, flags.yes.map((x) => m.name(x)).join(', ')));
+        if (flags.no.length) line(t(no, flags.no.map((x) => m.name(x)).join(', ')));
+      };
+      const handed = item && ev.items.find((x) => x.id === item);
+      if (handed && handed.random) line(t('eventItemRandom'));
+      if (!item && ev.research.length > 1) line(t('eventOneOf', ev.research.length));
+      if (!ev.ways.length) line(t('eventNoTrigger'));
+      ev.ways.forEach((w, i) => {
+        if (i) box.appendChild(h('div', 'or', t('eventOr')));
+        if (w.kind === 'research') { chips(t('eventAfterResearch'), [w.id]); return; }
+        if (w.kind === 'mission') { line(t(w.failed ? 'eventAfterFailure' : 'eventAfterMission', m.name(w.id))); return; }
+        chips(t('eventNeeds'), w.research.yes);
+        chips(t('eventNot'), w.research.no);
+        listed('eventHave', 'eventHaveNot', w.items);
+        listed('eventBuilt', 'eventNotBuilt', w.facilities);
+        listed('eventBaseIn', 'eventNoBaseIn', { yes: [...w.regions.yes, ...w.countries.yes], no: [...w.regions.no, ...w.countries.no] });
+        // months are counted from the start of the game, the first one being 0 in the rules
+        if (w.last >= 0 && w.last === w.first) line(t('eventMonthOnly', w.first + 1));
+        else if (w.last >= 0) line(t('eventMonths', w.first + 1, w.last + 1));
+        else if (w.first > 0) line(t('eventMonthFrom', w.first + 1));
+        if (w.minDifficulty > 0 || w.maxDifficulty < 4) line(t('eventDifficulty', w.minDifficulty + 1, w.maxDifficulty + 1));
+        line(w.times > 1 ? t('eventOddsTimes', w.times, w.odds) : t('eventOdds', w.odds));
+        if (w.pool > 1) line(t('eventPool', w.pool));
+      });
     }
 
     // --- topic ----------------------------------------------------------------
@@ -222,9 +263,12 @@
         const s = this.section(t('sources'), 'k-source');
         const ul = h('ul', 'plain');
         for (const src of topic.sources) {
-          const li = h('li', null, m.name(src.id));
-          li.prepend(h('span', 'tag', t(`source_${src.kind}`)));
-          li.title = src.id;
+          const li = h('li');
+          const name = h('div', null, m.name(src.id));
+          name.prepend(h('span', 'tag', t(`source_${src.kind}`)));
+          name.title = src.id;
+          li.appendChild(name);
+          if (src.kind === 'event') this.eventWays(src.id, li);
           ul.appendChild(li);
         }
         s.appendChild(ul);
@@ -234,6 +278,9 @@
 
       add(this.topicList(t('leadsTo'), by('dep', 1).map((e) => e.to), 'k-dep'));
       add(this.topicList(t('unlocks'), by('unlock', 1).map((e) => e.to), 'k-unlock'));
+      const fires = by('event', 1);
+      add(this.topicList(t('firesEvents'), fires.filter((e) => !e.item).map((e) => e.to), 'k-event'));
+      add(this.topicList(t('firesItemEvents'), fires.filter((e) => e.item).map((e) => e.to), 'k-event'));
       add(this.topicList(t('givesFree'), topic.free, 'k-free'));
       for (const [gate, list] of Object.entries(topic.freeProtected)) {
         add(this.topicList(t('givesFreeIf', m.name(gate)), list, 'k-free'));
@@ -295,7 +342,7 @@
       }
       if (facts.children.length) frag.appendChild(facts);
 
-      if (!it.costBuy && !it.makers.length) {
+      if (!it.costBuy && !it.makers.length && !it.events.length) {
         const notes = h('div', 'notes');
         notes.appendChild(h('div', 'note', t('notBuyable')));
         frag.appendChild(notes);
@@ -307,6 +354,23 @@
       s.appendChild(list);
       s.appendChild(h('div', 'muted', m.topics[id].destroyItem ? t('itemConsumed') : t('itemKept')));
       frag.appendChild(s);
+
+      if (it.events.length) {
+        const sec = this.section(t('itemEvents'), 'k-event');
+        const ul = h('ul', 'plain');
+        for (const ev of it.events) {
+          const li = h('li');
+          const count = m.data.events[ev].items.find((x) => x.id === id).count;
+          const name = h('div', null, m.name(ev) + (count > 1 ? ` ×${count}` : ''));
+          name.prepend(h('span', 'tag', t('source_event')));
+          name.title = ev;
+          li.appendChild(name);
+          this.eventWays(ev, li, id);
+          ul.appendChild(li);
+        }
+        sec.appendChild(ul);
+        frag.appendChild(sec);
+      }
 
       if (it.costBuy && it.requiresBuy.length) {
         frag.appendChild(this.topicList(t('buyRequires'), it.requiresBuy, 'k-dep'));
