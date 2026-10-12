@@ -328,6 +328,9 @@
     const keys = new Set();
     const want = (k) => { if (k != null && k !== '') keys.add(String(k)); return k; };
 
+    // the words the game rates the progress of a research project with
+    ['STR_NONE', 'STR_UNKNOWN', 'STR_POOR', 'STR_AVERAGE', 'STR_GOOD', 'STR_EXCELLENT'].forEach(want);
+
     const itemIcon = (id) => {
       const it = items.get(id);
       return it && it.bigSprite != null ? sprite('BIGOBS.PCK', Number(it.bigSprite), { key: true }) : null;

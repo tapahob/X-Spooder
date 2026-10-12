@@ -18,6 +18,7 @@
       this.model = model;
       this.root = root;
       this.handlers = handlers;
+      this.honest = true; // no exact progress, cost or score: the game does not show them
       root.addEventListener('click', (ev) => {
         const chip = ev.target.closest('[data-topic]');
         if (chip) { handlers.onOpen(chip.dataset.topic); return; }
@@ -144,7 +145,8 @@
       if (state === 'avail') { note('p-avail', t('stateAvail')); return; }
       if (state === 'active' || state === 'paused') {
         const run = m.progress.active.get(id);
-        note('p-active', t(state === 'active' ? 'stateActive' : 'statePaused', run.spent, run.cost, run.base, run.assigned));
+        if (this.honest) note('p-active', t(state === 'active' ? 'stateActiveHonest' : 'statePausedHonest', m.name(m.progressRating(id)), run.base, run.assigned));
+        else note('p-active', t(state === 'active' ? 'stateActive' : 'statePaused', run.spent, run.cost, run.base, run.assigned));
         return;
       }
       const b = m.blockers(id);
@@ -224,8 +226,8 @@
         f.appendChild(v);
         facts.appendChild(f);
       };
-      if (topic.cost) fact(t('cost'), String(topic.cost), t('costHint'));
-      if (topic.points) fact(t('points'), String(topic.points));
+      if (topic.cost && !(this.honest && m.state(id) !== 'done')) fact(t('cost'), String(topic.cost), t('costHint'));
+      if (topic.points && !this.honest) fact(t('points'), String(topic.points));
       if (topic.section) fact(t('section'), m.name(topic.section));
       if (facts.children.length) frag.appendChild(facts);
 

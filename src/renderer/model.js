@@ -281,6 +281,21 @@
       return null;
     }
 
+    /**
+     * How the game itself words the progress of a running project (it never shows the numbers):
+     * nothing without scientists, "unknown" for the first third, and after that a rating of how
+     * many scientists work on it for its size. Returns the game's string id.
+     */
+    progressRating(id) {
+      const run = this.progress && this.progress.active.get(id);
+      if (!run) return null;
+      if (!run.assigned) return 'STR_NONE';
+      const cost = run.cost || this.topics[id].cost || 1;
+      if (run.spent / cost <= 0.333) return 'STR_UNKNOWN';
+      const rating = run.assigned / cost;
+      return rating <= 0.008 ? 'STR_POOR' : rating <= 0.14 ? 'STR_AVERAGE' : rating <= 0.26 ? 'STR_GOOD' : 'STR_EXCELLENT';
+    }
+
     /** The researched topics that closed this one off (`disables`). */
     disabledBy(id) {
       const p = this.progress;

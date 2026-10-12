@@ -438,7 +438,55 @@ details.reveal > .article { padding: 8px 10px 10px; }
 
 .k-group { --c: #9aa3b8; }
 .k-all { --c: var(--accent); }
+/* Honest Mode is not one more filter: a big switch, green when on and red when off */
+#topbar .toggle.k-honest {
+  gap: 8px; padding: 4px 13px 4px 5px;
+  font-size: 14px; font-weight: 700; color: var(--text);
+  border: 2px solid var(--disable);
+  background: color-mix(in srgb, var(--disable) 16%, transparent);
+}
+.toggle.k-honest i {
+  position: relative;
+  width: 40px; height: 22px;
+  border: 0; border-radius: 999px;
+  background: var(--disable);
+  transition: background .15s;
+}
+.toggle.k-honest i::after {
+  content: "";
+  position: absolute; left: 3px; top: 3px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #fff;
+  transition: translate .15s;
+}
+#topbar .toggle.k-honest:has(input:checked) {
+  border-color: var(--unlock);
+  background: color-mix(in srgb, var(--unlock) 16%, transparent);
+}
+.toggle.k-honest:has(input:checked) i { background: var(--unlock); }
+.toggle.k-honest:has(input:checked) i::after { translate: 18px 0; }
+
+/* the first-launch pointer at the Honest Mode switch */
+#honest-tip {
+  position: fixed; z-index: 50;
+  max-width: 300px; padding: 9px 12px;
+  text-align: left; line-height: 1.4;
+  color: var(--accent-ink); background: var(--accent);
+  border: 0; border-radius: var(--radius);
+  box-shadow: 0 8px 24px #000a;
+  cursor: pointer;
+}
+#honest-tip:hover:not(:disabled) { background: #ffc266; }
+#honest-tip::before {
+  content: "";
+  position: absolute; left: var(--arrow, 50%); top: -7px;
+  width: 16px; height: 16px; margin-left: -8px;
+  background: inherit; rotate: 45deg;
+}
 #topbar { flex-wrap: wrap; row-gap: 6px; min-width: 0; }
+/* the right-hand group stays on the right when the bar wraps to a second row */
+#topbar .spacer + .group { margin-left: auto; }
+#honest-slot { display: flex; }
 
 .node .meta .points { display: inline-flex; align-items: center; gap: 3px; margin-left: 5px; color: #f3d27a; }
 .node .meta .points + .func { margin-left: auto; }

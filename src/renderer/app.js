@@ -7,7 +7,8 @@
   const DEPTHS = [0, 1, 2, 3, 4, 6, 99];
   const GENERATIONS = [0, 1, 2, 3, 4, 5, 99]; // 99 = unlimited
   const TOGGLES = ['dep', 'unlock', 'free', 'event', 'disable', 'item'];
-  const SWITCHES = [...TOGGLES, 'group', 'all']; // toolbar switches: edge kinds, section grouping, all entry points
+  // toolbar switches: edge kinds, section grouping, all entry points, "only what the game shows"
+  const SWITCHES = [...TOGGLES, 'group', 'all', 'honest'];
   const STATES = ['done', 'avail', 'active', 'disabled'];
   const START = '@start'; // pseudo-location: the tree grown from the starting research projects
 
@@ -27,6 +28,7 @@
   let config = {};      // {mod, language, useSubmods}
   let mods = [];        // master mods installed in the game folder: [{id, name, version, saveDir}]
   let modId = null;     // the mod on screen
+  let honest = store.get('honest', true); // hide what the game hides: exact research progress and score
   let allRoots = false; // the start view also grows from the entry points that wait for an item or an event
   let model, graph, details, languages;
   let lang;        // language in effect
@@ -196,6 +198,7 @@
     graph.model = model;
     details.model = model;
     syncToolbar();
+    placeHonestTip();
     history.back.length = 0;
     history.fwd.length = 0;
     current = null;
@@ -252,7 +255,9 @@
     graph.kinds = new Set(XS.KINDS.filter((k) => !off.has(k)));
     graph.showItems = !off.has('item');
     graph.groupSections = !off.has('group');
+    graph.honest = honest;
     details = new XS.Details(model, $('#details'), { onOpen: (id) => open(id) });
+    details.honest = honest;
   }
 
   // --- navigation -------------------------------------------------------------
@@ -315,8 +320,7 @@
     $('#sel-lang').value = langSetting === 'auto' || !languages.includes(langSetting) ? 'auto' : langSetting;
     $('#sel-lang').title = t('language');
 
-    const toggles = $('#kind-toggles');
-    toggles.replaceChildren(...SWITCHES.map((kind) => {
+    const switches = SWITCHES.map((kind) => {
       const label = document.createElement('label');
       label.className = `toggle k-${kind}`;
       label.title = t(`legend_${kind}`);
@@ -328,7 +332,10 @@
       text.textContent = t(`kind_${kind}`);
       label.append(box, swatch, text);
       return label;
-    }));
+    });
+    // Honest Mode is no filter of the tree: it sits apart, on the right, next to "Fit"
+    $('#honest-slot').replaceChildren(switches.pop());
+    $('#kind-toggles').replaceChildren(...switches);
 
     $('#legend').replaceChildren(...TOGGLES.map((kind) => {
       const row = document.createElement('div');
@@ -461,13 +468,40 @@
     details.refresh();
   }
 
+  // First launch: point at Honest Mode, so that nobody wonders where the numbers went.
+  // Shown until it is clicked away or the switch is used.
+  function placeHonestTip() {
+    const label = document.querySelector('#honest-slot .k-honest');
+    if (store.get('honestTip', false) || !honest || !label || $('#app').hidden) return;
+    let tip = $('#honest-tip');
+    if (!tip) {
+      tip = document.createElement('button');
+      tip.id = 'honest-tip';
+      tip.addEventListener('click', dismissHonestTip);
+      document.body.appendChild(tip);
+    }
+    tip.textContent = t('honestTip');
+    const r = label.getBoundingClientRect();
+    const middle = r.left + r.width / 2;
+    const left = Math.max(8, Math.min(middle - tip.offsetWidth / 2, window.innerWidth - tip.offsetWidth - 8));
+    tip.style.left = `${left}px`;
+    tip.style.top = `${r.bottom + 12}px`;
+    tip.style.setProperty('--arrow', `${middle - left}px`);
+  }
+
+  function dismissHonestTip() {
+    store.set('honestTip', true);
+    const tip = $('#honest-tip');
+    if (tip) tip.remove();
+  }
+
   function syncToolbar() {
     $('#sel-up').value = String(graph.up);
     $('#sel-down').value = String(graph.down);
     $('#sel-gen').value = String(graph.maxGen);
-    for (const box of document.querySelectorAll('#kind-toggles input')) {
+    for (const box of document.querySelectorAll('#topbar input[data-kind]')) {
       const kind = box.dataset.kind;
-      box.checked = kind === 'item' ? graph.showItems : kind === 'group' ? graph.groupSections : kind === 'all' ? allRoots : graph.kinds.has(kind);
+      box.checked = kind === 'item' ? graph.showItems : kind === 'group' ? graph.groupSections : kind === 'all' ? allRoots : kind === 'honest' ? honest : graph.kinds.has(kind);
     }
   }
 
@@ -509,6 +543,7 @@
     if (wired) return;
     wired = true;
 
+    window.addEventListener('resize', placeHonestTip);
     $('#btn-back').addEventListener('click', () => go(-1));
     $('#btn-fwd').addEventListener('click', () => go(1));
     $('#btn-home').addEventListener('click', () => open(START));
@@ -522,7 +557,7 @@
 
     $('#sel-gen').addEventListener('change', (e) => { store.set('gens', +e.target.value); graph.update({ maxGen: +e.target.value }); });
 
-    $('#kind-toggles').addEventListener('change', (e) => {
+    $('#topbar').addEventListener('change', (e) => {
       const kind = e.target.dataset.kind;
       if (!kind) return;
       if (kind === 'all') {
@@ -530,6 +565,15 @@
         allRoots = e.target.checked;
         store.set(`all.${modId}`, allRoots);
         open(START);
+        return;
+      }
+      if (kind === 'honest') {
+        dismissHonestTip();
+        honest = e.target.checked;
+        store.set('honest', honest);
+        graph.honest = details.honest = honest;
+        graph.rebuild(graph.anchor());
+        details.refresh();
         return;
       }
       if (kind === 'item') graph.showItems = e.target.checked;
@@ -576,6 +620,7 @@
       renderChrome();
       renderSaveInfo();
       syncToolbar();
+      placeHonestTip();
       renderResults();
       graph.rebuild(graph.anchor());
       details.refresh();

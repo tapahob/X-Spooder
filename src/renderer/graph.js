@@ -144,16 +144,31 @@
   }
 
   /** A curve from the right side of `a` to the left side of `b` (or around, if `b` is not to the right). */
-  function cardLink(a, b) {
+  // `shift` moves the whole link up or down: several links between the same two cards run side by side
+  function cardLink(a, b, shift = 0) {
+    const ay = a.y + shift, by = b.y + shift;
     if (b.x - b.w / 2 >= a.x + a.w / 2) {
       const x1 = a.x + a.w / 2, x2 = b.x - b.w / 2, bend = Math.max(40, (x2 - x1) * 0.5);
-      return { d: `M${x1},${a.y}C${x1 + bend},${a.y} ${x2 - bend},${b.y} ${x2},${b.y}`, tip: [x2, b.y, 0] };
+      return { d: `M${x1},${ay}C${x1 + bend},${ay} ${x2 - bend},${by} ${x2},${by}`, tip: [x2, by, 0] };
     }
     const x1 = a.x - a.w / 2, x2 = b.x + b.w / 2, sag = (a.h + b.h) / 2;
     return {
-      d: `M${x1},${a.y}C${x1 - 70},${a.y + sag} ${x2 + 70},${b.y + sag} ${x2},${b.y}`,
-      tip: [x2, b.y, Math.atan2(-sag, -70)],
+      d: `M${x1},${ay}C${x1 - 70},${ay + sag} ${x2 + 70},${by + sag} ${x2},${by}`,
+      tip: [x2, by, Math.atan2(-sag, -70)],
     };
+  }
+
+  /** Links that join the same two cards (a requirement and an event, say) must not hide each other. */
+  function spreadParallel(links) {
+    const pairs = new Map();
+    for (const e of links) {
+      const key = `${e.from}>${e.to}`;
+      if (!pairs.has(key)) pairs.set(key, []);
+      pairs.get(key).push(e);
+    }
+    for (const list of pairs.values()) {
+      list.forEach((e, i) => { e.shift = (i - (list.length - 1) / 2) * 9; });
+    }
   }
 
   /** An arc from the bottom of `a` to the bottom of `b`, for links that are not part of the layout. */
@@ -275,6 +290,7 @@
       this.down = 1;
       this.kinds = new Set(['dep', 'unlock', 'free', 'event', 'disable']);
       this.showItems = true;
+      this.honest = true;        // show only what the game shows: no exact progress, cost or score
       this.maxGen = UNLIMITED;   // how many generations past the available research to show
       this.groupSections = true; // one horizontal lane per ufopaedia section
       this.clusters = [];        // lanes of the last layout: [{section, left, top, w, h}]
@@ -322,6 +338,9 @@
         const g = gens.get(id);
         return g != null && g <= this.maxGen;
       };
+      // The limit trims what the tree leads to. What a focused topic itself needs is always
+      // shown: that is the question the view answers, however far away those topics are.
+      const reachable = (id, dir) => (dir < 0 && this.focus != null) || allowed(id);
 
       const bfs = (dir, depth) => {
         let frontier = [...start];
@@ -331,7 +350,7 @@
             const list = dir < 0 ? m.parents(id, walk) : m.children(id, walk);
             for (const e of list) {
               const other = dir < 0 ? e.from : e.to;
-              if (vis.has(other) || !allowed(other)) continue;
+              if (vis.has(other) || !reachable(other, dir)) continue;
               if (vis.size >= limit) { truncated = true; return; }
               vis.add(other);
               next.push(other);
@@ -348,7 +367,7 @@
         const list = dir < 0 ? m.parents(id, walk) : m.children(id, walk);
         for (const e of list) {
           const other = dir < 0 ? e.from : e.to;
-          if (allowed(other)) vis.add(other);
+          if (reachable(other, dir)) vis.add(other);
         }
       }
 
@@ -366,7 +385,7 @@
       for (const id of vis) {
         nodes.push({
           key: `t:${id}`, type: 'topic', id, ...TOPIC,
-          hiddenUp: m.parents(id, walk).filter((e) => !vis.has(e.from) && allowed(e.from)).length,
+          hiddenUp: m.parents(id, walk).filter((e) => !vis.has(e.from) && reachable(e.from, -1)).length,
           hiddenDown: m.children(id, walk).filter((e) => !vis.has(e.to) && allowed(e.to)).length,
         });
         if (this.showItems && m.hasItem(id)) {
@@ -539,7 +558,8 @@
         height = Math.max(height, y + MARGIN);
       }
 
-      for (const e of links) Object.assign(e, cardLink(byKey.get(e.from), byKey.get(e.to)));
+      spreadParallel(links);
+      for (const e of links) Object.assign(e, cardLink(byKey.get(e.from), byKey.get(e.to), e.shift));
       return { w: Math.max(right, 0) + SIDE + MARGIN, h: height };
     }
 
@@ -565,12 +585,14 @@
       const count = nodes.length;
       const out = Array.from({ length: count }, () => []);
       const inc = Array.from({ length: count }, () => []);
+      const focus = this.focus ? `t:${this.focus}` : null;
       for (const e of links) {
         const link = {
           a: index.get(e.from), b: index.get(e.to), back: false,
           // roots sit one column further away, leaving the next one to their children's item nodes
           len: roots && roots.has(e.from) ? 2 : 1,
-          weight: e.kind === 'item' ? 6 : e.kind === 'dep' ? 2 : 1,
+          // what touches the focused topic is pulled into the columns right next to it
+          weight: e.from === focus || e.to === focus ? 40 : e.kind === 'item' ? 6 : e.kind === 'dep' ? 2 : 1,
         };
         out[link.a].push(link);
         inc[link.b].push(link);
@@ -876,19 +898,22 @@
         if (state === 'active' || state === 'paused') {
           // being researched: progress instead of the plain cost, plus a bar along the bottom
           const run = m.progress.active.get(n.id);
-          meta.innerHTML = `${ICONS.flask}<span>${run.spent}/${run.cost}</span>`
+          // the game only gives a rating of the progress; the numbers are for those who ask for them
+          const progress = this.honest ? XS.esc(m.name(m.progressRating(n.id))) : `${run.spent}/${run.cost}`;
+          meta.innerHTML = `${ICONS.flask}<span>${progress}</span>`
             + (run.assigned ? `${ICONS.user}<span>${run.assigned}</span>` : '');
           const bar = document.createElement('div');
           bar.className = 'bar';
           const fill = document.createElement('i');
           fill.style.width = `${run.cost ? Math.min(100, Math.round((run.spent / run.cost) * 100)) : 0}%`;
           bar.appendChild(fill);
-          el.appendChild(bar);
+          if (!this.honest) el.appendChild(bar);
         } else if (status === 'locked') meta.innerHTML = ICONS.lock;
         else if (status === 'auto') meta.innerHTML = `${ICONS.bolt}<span>${XS.esc(t('auto'))}</span>`;
-        else meta.innerHTML = `${ICONS.flask}<span>${topic.cost}</span>`;
+        // how long a research takes is something the game only tells by doing it
+        else meta.innerHTML = this.honest && state !== 'done' ? ICONS.flask : `${ICONS.flask}<span>${topic.cost}</span>`;
         if (state === 'done') meta.insertAdjacentHTML('afterbegin', ICONS.check);
-        if (topic.points) {
+        if (topic.points && !this.honest) {
           // score awarded for finishing the research
           const pts = document.createElement('span');
           pts.className = 'points';
@@ -1005,13 +1030,39 @@
       this.applyView();
     }
 
+    /**
+     * The focused topic goes to the middle. When its direct prerequisites would then be off
+     * screen (another section's lane can be far away), the view takes them in instead, zooming
+     * out as far as needed; that zoom is dropped again on the next topic unless the user changed it.
+     */
+    showFocus(n) {
+      if (this.autoZoom && this.view.k === this.autoZoom.to) this.view.k = this.autoZoom.from;
+      this.autoZoom = null;
+      const box = { l: n.x - n.w / 2, r: n.x + n.w / 2, t: n.y - n.h / 2, b: n.y + n.h / 2 };
+      for (const e of this.edges) {
+        const p = e.to === n.key && e.kind !== 'disable' && this.nodes.get(e.from);
+        if (!p) continue;
+        box.l = Math.min(box.l, p.x - p.w / 2); box.r = Math.max(box.r, p.x + p.w / 2);
+        box.t = Math.min(box.t, p.y - p.h / 2); box.b = Math.max(box.b, p.y + p.h / 2);
+      }
+      const pad = 70, k = this.view.k;
+      const reach = Math.max(n.x - box.l, box.r - n.x) * 2 * k + pad, drop = Math.max(n.y - box.t, box.b - n.y) * 2 * k + pad;
+      if (reach <= this.vw && drop <= this.vh) { this.centerOn(n.key); return; }
+      const fit = Math.max(0.3, Math.min(k, (this.vw - pad) / (box.r - box.l), (this.vh - pad) / (box.b - box.t)));
+      if (fit < k) this.autoZoom = { from: k, to: fit };
+      this.view.k = fit;
+      this.view.x = this.vw / 2 - ((box.l + box.r) / 2) * fit;
+      this.view.y = this.vh / 2 - ((box.t + box.b) / 2) * fit;
+      this.applyView();
+    }
+
     /** A handful of foci are the roots of the tree, stacked in a column of their own. */
     stacksRoots() { return this.foci.length > 1 && this.foci.length <= MAX_STACKED; }
 
     /** One focus goes to the middle; several (the roots) go to the left edge, zoomed out to fit. */
     centerOnFoci() {
       const ns = this.foci.map((id) => this.nodes.get(`t:${id}`)).filter(Boolean);
-      if (ns.length < 2) { if (ns.length) this.centerOn(ns[0].key); return; }
+      if (ns.length < 2) { if (ns.length) this.showFocus(ns[0]); return; }
       if (!this.stacksRoots()) {
         // a long first column: start at its first card, at a readable size
         const k = Math.min(this.view.k, 1);
